@@ -1,0 +1,1 @@
+"""VisionCare AI — Servicio de Inteligencia Artificial (FastAPI)."""

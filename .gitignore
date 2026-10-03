@@ -1,0 +1,38 @@
+# ══════════════════════════════════════════════════════
+# VisionCare AI — Servicio IA — .gitignore
+# ══════════════════════════════════════════════════════
+
+# Entorno virtual
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Variables de entorno (NUNCA subir el .env real)
+.env
+.env.local
+
+# Pesos de modelos (se descargan o despliegan aparte, no van a Git)
+*.pt
+*.onnx
+*.engine
+
+# Logs
+logs/
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/*
+!.vscode/extensions.json
+.idea/

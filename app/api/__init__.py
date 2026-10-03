@@ -1,0 +1,1 @@
+"""VisionCare AI — Routers de la API (versionada bajo /api/v1)."""

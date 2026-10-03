@@ -1,0 +1,1 @@
+"""VisionCare AI — Núcleo del servicio: seguridad y manejo de errores."""

@@ -1,0 +1,24 @@
+# ══════════════════════════════════════════════════════
+# VisionCare AI — Servicio de IA (FastAPI + Python 3.10)
+# ══════════════════════════════════════════════════════
+
+# ─── Framework web ───
+fastapi>=0.115.0,<1.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+
+# ─── Base de datos (PostgreSQL + SQLAlchemy async) ───
+sqlalchemy[asyncio]>=2.0.30
+asyncpg>=0.29.0
+
+# ─── Configuración y validación ───
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# ─── Seguridad (validar JWT emitido por NestJS) ───
+PyJWT>=2.8.0
+
+# ─── Inteligencia artificial ───
+ultralytics>=8.3.0        # YOLOv8 (incluye torch, opencv, etc.)
+pillow>=10.3.0
+numpy>=1.26.0
