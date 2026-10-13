@@ -9,12 +9,13 @@ CAPA 1 — X-API-Key (servidor a servidor):
     evitar ataques de timing.
 
 CAPA 2 — Bearer JWT (usuario final, reenviado por NestJS):
-    Valida firma (mismo JWT_SECRET que NestJS), algoritmo,
-    expiración e issuer. Devuelve los datos del usuario para
+    Valida firma (mismo JWT_SECRET que NestJS), algoritmo y
+    expiración; valida issuer solo si está configurado. Devuelve los datos para
     atribuir la ejecución en registros_ia (monitoreo).
 ═══════════════════════════════════════════════════════════
 """
 
+import logging
 import secrets
 from typing import Any
 
@@ -22,6 +23,8 @@ import jwt  # PyJWT
 from fastapi import Depends, Header, HTTPException, status
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 # ═══════════════════ CAPA 1: API KEY ═══════════════════
@@ -77,24 +80,26 @@ async def obtener_usuario_actual(
         payload = jwt.decode(
             partes[1],
             settings.jwt_secret,
-            algorithms=[settings.jwt_algorithm],
-            issuer=settings.jwt_issuer,
+            algorithms=["HS256"],
+            issuer=settings.jwt_issuer or None,
             options={"require": ["exp", "sub"]},
         )
-    except jwt.ExpiredSignatureError:
+    except jwt.PyJWTError as error:
+        if not settings.es_produccion:
+            logger.warning(
+                "JWT rechazado (%s): %s", type(error).__name__, error
+            )
+
+        if isinstance(error, jwt.ExpiredSignatureError):
+            detail = "El token ha expirado."
+        elif isinstance(error, jwt.InvalidIssuerError):
+            detail = "El token no fue emitido por el issuer configurado."
+        else:
+            detail = "Token inválido."
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="El token ha expirado.",
-        )
-    except jwt.InvalidIssuerError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="El token no fue emitido por VisionCare AI.",
-        )
-    except jwt.PyJWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido.",
+            detail=detail,
         )
 
     sub = payload.get("sub")

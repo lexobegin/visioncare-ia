@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # ─── JWT (mismo secret que el backend NestJS) ───
     jwt_secret: str = ""
-    jwt_issuer: str = "visioncare-ai"
+    jwt_issuer: str = ""
     jwt_algorithm: str = "HS256"
 
     # ─── API Key compartida (NestJS ↔ IA) ───
