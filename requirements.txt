@@ -1,5 +1,7 @@
 # ══════════════════════════════════════════════════════
 # VisionCare AI — Servicio de IA (FastAPI + Python 3.10)
+# Sprint 2: + OCR (EasyOCR), colores (numpy/HSV),
+#            billetes, señales, productos, descripción
 # ══════════════════════════════════════════════════════
 
 # ─── Framework web ───
@@ -20,5 +22,6 @@ PyJWT>=2.8.0
 
 # ─── Inteligencia artificial ───
 ultralytics>=8.3.0        # YOLOv8 (incluye torch, opencv, etc.)
+easyocr>=1.7.0            # OCR (reutiliza torch — S2, CU11)
 pillow>=10.3.0
 numpy>=1.26.0

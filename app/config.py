@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     yolo_device: str = "cpu"
     yolo_imgsz: int = 640
 
+    # ─── OCR (EasyOCR — Sprint 2) ───
+    # Idiomas a cargar: es+en cubren señales/etiquetas del contexto
+    ocr_idiomas: str = "es,en"
+    ocr_gpu: bool = False           # EasyOCR en CPU (consistente con YOLO)
+    ocr_precarga: bool = True       # warmup al arrancar (~80 MB 1ª vez)
+
     # ─── Límites de imágenes ───
     max_image_size_mb: int = 10
 
@@ -110,6 +116,11 @@ class Settings(BaseSettings):
     def api_key_activa(self) -> bool:
         """True si se exige X-API-Key en las peticiones."""
         return len(self.ia_api_key.strip()) > 0
+
+    @property
+    def ocr_idiomas_list(self) -> list[str]:
+        """Convierte 'es,en' → ['es', 'en'] para EasyOCR."""
+        return [i.strip() for i in self.ocr_idiomas.split(",") if i.strip()]
 
 
 @lru_cache
