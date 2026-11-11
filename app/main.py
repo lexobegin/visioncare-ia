@@ -31,7 +31,7 @@ from app.config import settings
 from app.core.exceptions import registrar_manejadores
 from app.database import cerrar_conexiones
 from app.init_db import init_db
-from app.services import deteccion_service
+from app.services import deteccion_service, ocr_service
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,6 +68,18 @@ async def lifespan(app: FastAPI):
             "petición: %s",
             e,
         )
+
+    # 3. Warmup de OCR (best-effort: la 1ª vez descarga ~80 MB
+    #    de modelos; si falla se reintentará en la 1ª petición)
+    if settings.ocr_precarga:
+        try:
+            await ocr_service.precargar()
+        except Exception as e:
+            logger.warning(
+                "Warmup de OCR falló — se reintentará en la primera "
+                "petición: %s",
+                e,
+            )
 
     logger.info("=== Servicio IA listo para peticiones ===")
 
@@ -109,10 +121,29 @@ registrar_manejadores(app)
 
 # ─── Routers (bajo el prefijo global /api/v1) ───
 from app.api.v1.deteccion_router import router as deteccion_router
+from app.api.v1.ocr_router import router as ocr_router
 from app.api.v1.salud_router import router as salud_router
+
+from app.api.v1.colores_router import router as colores_router
+from app.api.v1.productos_router import router as productos_router
+
+from app.api.v1.billetes_router import router as billetes_router
+
+from app.api.v1.senales_router import router as senales_router
+from app.api.v1.descripciones_router import router as descripciones_router
+
 
 app.include_router(salud_router, prefix=settings.api_prefix_path)
 app.include_router(deteccion_router, prefix=settings.api_prefix_path)
+app.include_router(ocr_router, prefix=settings.api_prefix_path)
+
+app.include_router(colores_router, prefix=settings.api_prefix_path)
+app.include_router(productos_router, prefix=settings.api_prefix_path)
+
+app.include_router(billetes_router, prefix=settings.api_prefix_path)
+
+app.include_router(senales_router, prefix=settings.api_prefix_path)
+app.include_router(descripciones_router, prefix=settings.api_prefix_path)
 
 
 @app.get("/", include_in_schema=False)
