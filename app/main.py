@@ -132,6 +132,9 @@ from app.api.v1.billetes_router import router as billetes_router
 from app.api.v1.senales_router import router as senales_router
 from app.api.v1.descripciones_router import router as descripciones_router
 
+# Sprint 3 — monitoreo (CU40): lectura agregada de modelos_ia/registros_ia
+from app.api.v1.monitoreo_router import router as monitoreo_router
+
 
 app.include_router(salud_router, prefix=settings.api_prefix_path)
 app.include_router(deteccion_router, prefix=settings.api_prefix_path)
@@ -144,6 +147,9 @@ app.include_router(billetes_router, prefix=settings.api_prefix_path)
 
 app.include_router(senales_router, prefix=settings.api_prefix_path)
 app.include_router(descripciones_router, prefix=settings.api_prefix_path)
+
+# Sprint 3 — monitoreo (CU40)
+app.include_router(monitoreo_router, prefix=settings.api_prefix_path)
 
 
 @app.get("/", include_in_schema=False)
