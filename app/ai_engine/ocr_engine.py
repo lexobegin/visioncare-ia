@@ -21,9 +21,11 @@ Salida (ResultadoOCR): texto fusionado + confianza + líneas.
 import asyncio
 import io
 import logging
+import shutil
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 from PIL import Image, UnidentifiedImageError
@@ -59,28 +61,64 @@ class OcrReader:
     def __init__(self) -> None:
         self._reader = None
         self._lock = threading.Lock()
+        self._error_inicializacion: str | None = None
 
     # ═══════════════════ CARGA ═══════════════════
+
+    def _obtener_storage_dir(self) -> str:
+        """Determina la ruta de modelos, priorizando el directorio local models/."""
+        ruta_dir = Path(getattr(settings, "ocr_model_dir", "models"))
+        if not ruta_dir.is_absolute():
+            raiz = Path(__file__).resolve().parent.parent.parent
+            ruta_dir = raiz / ruta_dir
+        ruta_dir.mkdir(parents=True, exist_ok=True)
+
+        # Si el directorio local no tiene los modelos, intentar copiar desde ~/.EasyOCR/model
+        craft_file = ruta_dir / "craft_mlt_25k.pth"
+        latin_file = ruta_dir / "latin_g2.pth"
+        if not craft_file.exists() or not latin_file.exists():
+            try:
+                home_dir = Path.home() / ".EasyOCR" / "model"
+                if home_dir.exists():
+                    for nombre in ["craft_mlt_25k.pth", "latin_g2.pth"]:
+                        origen = home_dir / nombre
+                        destino = ruta_dir / nombre
+                        if origen.exists() and not destino.exists():
+                            shutil.copy2(origen, destino)
+                            logger.info("Modelo %s sincronizado desde %s a %s", nombre, origen, destino)
+            except (PermissionError, OSError) as e:
+                logger.debug("No se pudo acceder a ~/.EasyOCR/model: %s", e)
+
+        return str(ruta_dir)
 
     def _obtener_reader(self):
         """Instancia el reader si aún no está cargado (thread-safe)."""
         if self._reader is None:
             with self._lock:
                 if self._reader is None:  # doble chequeo
+                    storage_dir = self._obtener_storage_dir()
                     logger.info(
-                        "Cargando EasyOCR (idiomas: %s, gpu: %s)...",
+                        "Cargando EasyOCR (idiomas: %s, gpu: %s, dir: %s)...",
                         settings.ocr_idiomas_list,
                         settings.ocr_gpu,
+                        storage_dir,
                     )
                     inicio = time.perf_counter()
 
                     import easyocr  # import perezoso
 
-                    self._reader = easyocr.Reader(
-                        settings.ocr_idiomas_list,
-                        gpu=settings.ocr_gpu,
-                        verbose=False,
-                    )
+                    try:
+                        self._reader = easyocr.Reader(
+                            settings.ocr_idiomas_list,
+                            gpu=settings.ocr_gpu,
+                            model_storage_directory=storage_dir,
+                            verbose=False,
+                        )
+                        self._error_inicializacion = None
+                    except Exception as e:
+                        self._error_inicializacion = str(e)
+                        logger.error("Error al instanciar EasyOCR Reader: %s", e)
+                        raise
 
                     duracion = (time.perf_counter() - inicio) * 1000
                     logger.info("EasyOCR cargado en %.0f ms.", duracion)
@@ -92,9 +130,14 @@ class OcrReader:
         ejecuta una inferencia mínima (se llama desde lifespan).
         """
         def _warmup() -> None:
-            reader = self._obtener_reader()
-            imagen_dummy = np.zeros((64, 320, 3), dtype=np.uint8)
-            reader.readtext(imagen_dummy, detail=0, paragraph=False)
+            try:
+                reader = self._obtener_reader()
+                imagen_dummy = np.zeros((64, 320, 3), dtype=np.uint8)
+                reader.readtext(imagen_dummy, detail=0, paragraph=False)
+            except Exception as e:
+                self._error_inicializacion = str(e)
+                logger.error("Fallo durante el warmup de EasyOCR: %s", e)
+                raise
 
         await asyncio.to_thread(_warmup)
         logger.info("Warmup de OCR completado — listo para peticiones.")
@@ -104,11 +147,20 @@ class OcrReader:
         return self._reader is not None
 
     @property
+    def error_inicializacion(self) -> str | None:
+        return self._error_inicializacion
+
+    @property
+    def model_dir(self) -> str:
+        return self._obtener_storage_dir()
+
+    @property
     def info_modelo(self) -> dict[str, str]:
         return {
             "nombre": "easyocr",
             "version": "1.0",
             "idiomas": ",".join(settings.ocr_idiomas_list),
+            "storage_dir": self._obtener_storage_dir(),
         }
 
     # ═══════════════════ INFERENCIA ═══════════════════
@@ -124,6 +176,13 @@ class OcrReader:
 
     def _leer_sincrono(self, imagen_bytes: bytes) -> ResultadoOCR:
         """Inferencia real (sincrónica, protegida por lock)."""
+
+        # Validación fail-fast: si el modelo falló su inicialización, abortar de inmediato (< 1ms)
+        if self._reader is None and self._error_inicializacion:
+            raise RuntimeError(
+                f"El motor OCR no está disponible (error en inicialización: {self._error_inicializacion}). "
+                f"Verifique los archivos en '{settings.ocr_model_dir}' o ejecute 'python prepare_models.py'."
+            )
 
         # ─── 1. Validar y decodificar (Pillow) ───
         try:

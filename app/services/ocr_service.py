@@ -74,6 +74,21 @@ class OcrService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             )
+        except RuntimeError as e:
+            duracion = self._ms_desde(inicio)
+            self.logger.error("Motor OCR no disponible (fail-fast): %s", e)
+            await monitoreo.registrar_error(
+                tipo_modelo="OCR",
+                tipo_operacion=TIPO_OPERACION,
+                error=e,
+                duracion_ms=duracion,
+                id_usuario=id_usuario,
+                id_captura=id_captura,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Servicio OCR no disponible: {e}",
+            )
         except Exception as e:
             duracion = self._ms_desde(inicio)
             self.logger.exception("Fallo inesperado del motor OCR.")

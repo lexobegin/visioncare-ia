@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     ocr_precarga: bool = True       # warmup al arrancar (~80 MB 1ª vez)
     ocr_max_dimension: int = 1280   # Redimensión defensiva máxima (px) para evitar OOM
     ocr_canvas_size: int = 1280     # canvas_size para CRAFT detector de EasyOCR
+    ocr_model_dir: str = "models"   # Directorio local para almacenamiento de modelos OCR
 
     # ─── Límites de imágenes ───
     max_image_size_mb: int = 10

@@ -21,8 +21,10 @@ __pycache__/
 
 # Pesos de modelos (se descargan o despliegan aparte, no van a Git)
 *.pt
+*.pth
 *.onnx
 *.engine
+models/
 
 # Logs
 logs/

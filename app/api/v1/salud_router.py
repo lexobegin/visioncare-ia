@@ -32,7 +32,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import verificar_conexion
@@ -106,6 +107,7 @@ async def health(db_ok: bool = Depends(verificar_conexion)) -> dict:
                 "nombre": ocr_service.info_modelo["nombre"],
                 "idiomas": ocr_service.info_modelo["idiomas"],
                 "cargado": ocr_service.reader.cargado,
+                "error": getattr(ocr_service.reader, "error_inicializacion", None),
             },
         },
         "analizadores_compuestos": {
@@ -122,3 +124,47 @@ async def health(db_ok: bool = Depends(verificar_conexion)) -> dict:
         "version_api": "0.2.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@router.get(
+    "/health/ready",
+    summary="Readiness probe: verifica si los modelos de IA están listos para inferencia",
+    description=(
+        "Devuelve HTTP 200 si YOLO y EasyOCR están cargados en memoria y listos para atender "
+        "peticiones sin cold-start. Devuelve HTTP 503 si alguno de los modelos aún no está disponible."
+    ),
+)
+@router.get(
+    "/ready",
+    include_in_schema=False,
+)
+def readiness() -> JSONResponse:
+    yolo_listo = deteccion_service.detector.cargado
+    ocr_listo = ocr_service.reader.cargado
+    error_ocr = getattr(ocr_service.reader, "error_inicializacion", None)
+
+    todos_listos = yolo_listo and ocr_listo
+
+    estado = {
+        "status": "ready" if todos_listos else "not_ready",
+        "servicio": settings.app_name,
+        "modelos": {
+            "yolo": {
+                "listo": yolo_listo,
+            },
+            "ocr": {
+                "listo": ocr_listo,
+                "error": error_ocr,
+            },
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    if not todos_listos:
+        estado["mensaje"] = (
+            "Uno o más modelos de IA no están cargados en memoria. "
+            "Si el arranque falló, ejecute 'python prepare_models.py' para aprovisionar los artefactos."
+        )
+        return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=estado)
+
+    return JSONResponse(status_code=status.HTTP_200_OK, content=estado)

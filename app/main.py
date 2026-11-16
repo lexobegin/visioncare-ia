@@ -65,30 +65,35 @@ async def lifespan(app: FastAPI):
             e,
         )
 
-    # 2. Warmup de YOLO (best-effort: sin internet falla la
-    #    descarga inicial, pero se reintentará en la 1ª petición)
+    # 2. Warmup de YOLO
     try:
         await deteccion_service.precargar()
+        logger.info("Warmup de YOLO completado con éxito.")
     except Exception as e:
-        logger.warning(
-            "Warmup de YOLO falló — se reintentará en la primera "
-            "petición: %s",
+        logger.error(
+            "Warmup de YOLO falló — detección de objetos no disponible: %s",
             e,
         )
 
-    # 3. Warmup de OCR (best-effort: la 1ª vez descarga ~80 MB
-    #    de modelos; si falla se reintentará en la 1ª petición)
+    # 3. Warmup de OCR
     if settings.ocr_precarga:
         try:
             await ocr_service.precargar()
+            logger.info("Warmup de OCR completado con éxito.")
         except Exception as e:
-            logger.warning(
-                "Warmup de OCR falló — se reintentará en la primera "
-                "petición: %s",
+            logger.error(
+                "Warmup de OCR falló — faltan pesos o falló la inicialización. "
+                "Ejecute 'python prepare_models.py' para aprovisionar los modelos: %s",
                 e,
             )
 
-    logger.info("=== Servicio IA listo para peticiones ===")
+    todos_listos = deteccion_service.detector.cargado and ocr_service.reader.cargado
+    if todos_listos:
+        logger.info("=== Servicio IA listo para peticiones (Todos los modelos cargados en RAM) ===")
+    else:
+        logger.warning(
+            "=== Servicio IA iniciado en modo DEGRADADO (uno o más modelos no están listos. /health/ready devolverá 503) ==="
+        )
 
     yield  # ← aquí la app atiende peticiones
 
@@ -143,6 +148,8 @@ from app.api.v1.descripciones_router import router as descripciones_router
 from app.api.v1.monitoreo_router import router as monitoreo_router
 
 
+# Exponer health y readiness tanto en raíz (/health, /health/ready) como bajo /api/v1
+app.include_router(salud_router, prefix="", include_in_schema=False)
 app.include_router(salud_router, prefix=settings.api_prefix_path)
 app.include_router(deteccion_router, prefix=settings.api_prefix_path)
 app.include_router(ocr_router, prefix=settings.api_prefix_path)
