@@ -157,10 +157,12 @@ class DetectorObjetos:
         try:
             imagen = Image.open(
                 __import__("io").BytesIO(imagen_bytes)
-            ).convert("RGB")
-        except UnidentifiedImageError:
+            )
+            imagen.load()
+            imagen = imagen.convert("RGB")
+        except (UnidentifiedImageError, OSError, ValueError):
             raise ValueError(
-                "El archivo recibido no es una imagen válida "
+                "El archivo recibido no es una imagen válida o está dañado "
                 "(formatos aceptados: JPEG, PNG, WEBP)."
             )
         arreglo = np.array(imagen)

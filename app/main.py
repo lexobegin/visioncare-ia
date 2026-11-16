@@ -20,13 +20,14 @@ Docs:
     - ReDoc:       http://localhost:8000/redoc
 ═══════════════════════════════════════════════════════════
 """
-
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core import bootstrap  # Inicialización determinista de hilos BLAS/OpenMP
 from app.config import settings
 from app.core.exceptions import registrar_manejadores
 from app.database import cerrar_conexiones
@@ -46,6 +47,12 @@ async def lifespan(app: FastAPI):
 
     # ═══════════════ STARTUP ═══════════════
     logger.info("=== Iniciando %s (entorno: %s) ===", settings.app_name, settings.node_env)
+    logger.info(
+        "Configuración de hilos CPU: OPENBLAS=%s, OMP=%s, MKL=%s",
+        os.environ.get("OPENBLAS_NUM_THREADS", "default"),
+        os.environ.get("OMP_NUM_THREADS", "default"),
+        os.environ.get("MKL_NUM_THREADS", "default"),
+    )
 
     # 1. Tablas propias (best-effort: si la BD cae, el servicio
     #    levanta igual — el monitoreo ya es best-effort por diseño)
