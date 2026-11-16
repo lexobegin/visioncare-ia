@@ -63,9 +63,16 @@ class Settings(BaseSettings):
     ocr_idiomas: str = "es,en"
     ocr_gpu: bool = False           # EasyOCR en CPU (consistente con YOLO)
     ocr_precarga: bool = True       # warmup al arrancar (~80 MB 1ª vez)
+    ocr_max_dimension: int = 1280   # Redimensión defensiva máxima (px) para evitar OOM
+    ocr_canvas_size: int = 1280     # canvas_size para CRAFT detector de EasyOCR
 
     # ─── Límites de imágenes ───
     max_image_size_mb: int = 10
+
+    # ─── Concurrencia y límites de hilos CPU (BLAS / OpenMP / MKL) ───
+    openblas_num_threads: str = "1"
+    omp_num_threads: str = "1"
+    mkl_num_threads: str = "1"
 
     # ─── CORS ───
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
@@ -121,6 +128,13 @@ class Settings(BaseSettings):
     def ocr_idiomas_list(self) -> list[str]:
         """Convierte 'es,en' → ['es', 'en'] para EasyOCR."""
         return [i.strip() for i in self.ocr_idiomas.split(",") if i.strip()]
+
+    def model_post_init(self, __context) -> None:
+        """Propaga variables de concurrencia de bajo nivel al entorno del sistema operativo."""
+        import os
+        os.environ["OPENBLAS_NUM_THREADS"] = self.openblas_num_threads
+        os.environ["OMP_NUM_THREADS"] = self.omp_num_threads
+        os.environ["MKL_NUM_THREADS"] = self.mkl_num_threads
 
 
 @lru_cache

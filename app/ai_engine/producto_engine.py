@@ -80,10 +80,12 @@ class ProductoEngine:
     def _analizar_sincrono(self, imagen_bytes: bytes) -> ResultadoProductosInterno:
         # ─── 0. Decodificar una sola vez (para recortes) ───
         try:
-            imagen = Image.open(io.BytesIO(imagen_bytes)).convert("RGB")
-        except UnidentifiedImageError:
+            imagen = Image.open(io.BytesIO(imagen_bytes))
+            imagen.load()
+            imagen = imagen.convert("RGB")
+        except (UnidentifiedImageError, OSError, ValueError):
             raise ValueError(
-                "El archivo recibido no es una imagen válida "
+                "El archivo recibido no es una imagen válida o está dañado "
                 "(formatos aceptados: JPEG, PNG, WEBP)."
             )
 

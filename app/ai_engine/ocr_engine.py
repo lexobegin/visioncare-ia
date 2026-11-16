@@ -127,15 +127,40 @@ class OcrReader:
 
         # ─── 1. Validar y decodificar (Pillow) ───
         try:
-            imagen = Image.open(io.BytesIO(imagen_bytes)).convert("RGB")
-        except UnidentifiedImageError:
+            imagen = Image.open(io.BytesIO(imagen_bytes))
+            imagen.load()  # Forzar decodificación para detectar imágenes corruptas/truncadas
+            imagen = imagen.convert("RGB")
+        except (UnidentifiedImageError, OSError, ValueError):
             raise ValueError(
-                "El archivo recibido no es una imagen válida "
+                "El archivo recibido no es una imagen válida o está dañado "
                 "(formatos aceptados: JPEG, PNG, WEBP)."
             )
-        arreglo = np.array(imagen)
 
-        # ─── 2. Inferencia EasyOCR (sección crítica) ───
+        ancho_orig, alto_orig = imagen.size
+        if ancho_orig <= 0 or alto_orig <= 0:
+            raise ValueError("Las dimensiones de la imagen son inválidas.")
+
+        # ─── 2. Redimensionamiento adaptativo (prevención de OOM) ───
+        # Limita la dimensión máxima para evitar que el detector CRAFT de EasyOCR asigne
+        # tensores excesivos (ej: >1.2 GB en imágenes de celular >= 12MP en CPU).
+        max_dim = getattr(settings, "ocr_max_dimension", 1280)
+        canvas_size = getattr(settings, "ocr_canvas_size", max_dim)
+
+        dim_mayor = max(ancho_orig, alto_orig)
+        if dim_mayor > max_dim:
+            factor_escala = max_dim / dim_mayor
+            nuevo_ancho = max(1, int(round(ancho_orig * factor_escala)))
+            nuevo_alto = max(1, int(round(alto_orig * factor_escala)))
+            imagen_proc = imagen.resize(
+                (nuevo_ancho, nuevo_alto), Image.Resampling.LANCZOS
+            )
+        else:
+            factor_escala = 1.0
+            imagen_proc = imagen
+
+        arreglo = np.array(imagen_proc)
+
+        # ─── 3. Inferencia EasyOCR (sección crítica) ───
         with self._lock:
             inicio = time.perf_counter()
 
@@ -143,11 +168,12 @@ class OcrReader:
                 arreglo,
                 detail=1,        # [bbox, texto, confianza]
                 paragraph=False, # líneas individuales (control del orden)
+                canvas_size=canvas_size,
             )
 
             duracion_ms = int((time.perf_counter() - inicio) * 1000)
 
-        # ─── 3. Normalizar líneas + orden de lectura ───
+        # ─── 4. Normalizar líneas + orden de lectura (escalando a coords originales) ───
         lineas: list[LineaTexto] = []
 
         for bbox, texto, conf in resultados:
@@ -155,8 +181,12 @@ class OcrReader:
             if not texto_limpio:
                 continue
 
-            xs = [p[0] for p in bbox]
-            ys = [p[1] for p in bbox]
+            if factor_escala != 1.0:
+                xs = [p[0] / factor_escala for p in bbox]
+                ys = [p[1] / factor_escala for p in bbox]
+            else:
+                xs = [p[0] for p in bbox]
+                ys = [p[1] for p in bbox]
 
             lineas.append(
                 LineaTexto(
