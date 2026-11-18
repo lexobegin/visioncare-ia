@@ -1,0 +1,24 @@
+name: Deploy a la VM
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-vm
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conectar a la VM y desplegar
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          install -m 600 /dev/null ~/vm_key
+          printf '%s\n' "$SSH_KEY" > ~/vm_key
+          ssh -i ~/vm_key -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            'bash /opt/visioncare/deploy-ia.sh'
+          rm -f ~/vm_key
